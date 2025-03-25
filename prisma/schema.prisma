@@ -1,0 +1,347 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+enum UsuarioStatus {
+  ativo
+  inativo
+}
+
+enum UsuarioPermissao {
+  administrador_nacional
+  administrador_regional
+  operador
+}
+
+enum UsuarioCargo {
+  magistrado
+  servidor
+}
+
+enum EmpresaStatus {
+  em_vigor
+  prorrogado
+  expirado
+}
+
+enum EtapaStatus {
+  concluida
+  em_andamento
+  pendente
+}
+
+enum TribunalStatus {
+  ativo
+  inativo
+}
+
+enum IntegracaoTipo {
+  api
+  webhook
+  filas
+  mni
+  nenhum
+}
+
+enum SistemaJudicial {
+  pje
+  projudi
+  eproc
+  esaj
+}
+
+// Modelos
+model Regiao {
+  id        Int       @id @default(autoincrement())
+  nome      String    @unique
+  sigla     String    @unique @db.VarChar(2)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  tribunais Tribunal[]
+  usuarios  Usuario[]
+
+  @@map("regioes")
+}
+
+model Tribunal {
+  id                  Int                   @id @default(autoincrement())
+  nome                String                @db.VarChar(255)
+  sigla               String                @unique @db.VarChar(10)
+  email               String                @db.VarChar(255)
+  telefone            String?               @db.VarChar(20)
+  status              TribunalStatus        @default(ativo)
+  regiaoId            Int?                  @map("regiao_id")
+  regiao              Regiao?               @relation(fields: [regiaoId], references: [id])
+  createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime              @default(now()) @map("updated_at") @db.Timestamptz(6)
+  usuarios            Usuario[]
+  processos           Processo[]
+  integracaoNotificacao IntegracaoNotificacao?
+  integracaoConsulta  IntegracaoConsulta?
+  comunicacoesTribunal ComunicacaoTribunal[]
+
+  @@map("tribunais")
+}
+
+model IntegracaoNotificacao {
+  id                Int             @id @default(autoincrement())
+  tribunalId        Int             @unique @map("tribunal_id")
+  tribunal          Tribunal        @relation(fields: [tribunalId], references: [id], onDelete: Cascade)
+  ativa             Boolean         @default(false)
+  tipo              IntegracaoTipo  @default(nenhum)
+  enderecoApi       String?         @map("endereco_api") @db.VarChar(255)
+  chaveApi          String?         @map("chave_api") @db.VarChar(255)
+  urlWebhook        String?         @map("url_webhook") @db.VarChar(255)
+  secretWebhook     String?         @map("secret_webhook") @db.VarChar(255)
+  servidorFila      String?         @map("servidor_fila") @db.VarChar(255)
+  portaFila         String?         @map("porta_fila") @db.VarChar(10)
+  usuarioFila       String?         @map("usuario_fila") @db.VarChar(100)
+  senhaFila         String?         @map("senha_fila") @db.VarChar(255)
+  nomeFila          String?         @map("nome_fila") @db.VarChar(100)
+  urlMni            String?         @map("url_mni") @db.VarChar(255)
+  certificadoMni    String?         @map("certificado_mni") @db.Text
+  senhaCertificado  String?         @map("senha_certificado") @db.VarChar(255)
+  versaoMni         String?         @map("versao_mni") @db.VarChar(10)
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime        @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("integracoes_notificacao")
+}
+
+model IntegracaoConsulta {
+  id                Int             @id @default(autoincrement())
+  tribunalId        Int             @unique @map("tribunal_id")
+  tribunal          Tribunal        @relation(fields: [tribunalId], references: [id], onDelete: Cascade)
+  ativa             Boolean         @default(false)
+  sistema           SistemaJudicial?
+  urlConsulta       String?         @map("url_consulta") @db.VarChar(255)
+  chaveConsulta     String?         @map("chave_consulta") @db.VarChar(255)
+  usuarioConsulta   String?         @map("usuario_consulta") @db.VarChar(100)
+  senhaConsulta     String?         @map("senha_consulta") @db.VarChar(255)
+  autoSync          Boolean         @default(false) @map("auto_sync")
+  syncInterval      Int?            @map("sync_interval")
+  ultimaSync        DateTime?       @map("ultima_sync") @db.Timestamptz(6)
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime        @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("integracoes_consulta")
+}
+
+model Usuario {
+  id                Int               @id @default(autoincrement())
+  nome              String            @db.VarChar(255)
+  email             String            @unique @db.VarChar(255)
+  senhaHash         String            @map("senha_hash") @db.VarChar(255)
+  cargo             UsuarioCargo
+  permissao         UsuarioPermissao
+  status            UsuarioStatus     @default(ativo)
+  tribunalId        Int?              @map("tribunal_id")
+  tribunal          Tribunal?         @relation(fields: [tribunalId], references: [id])
+  regiaoId          Int?              @map("regiao_id")
+  regiao            Regiao?           @relation(fields: [regiaoId], references: [id])
+  ultimoAcesso      DateTime?         @map("ultimo_acesso") @db.Timestamptz(6)
+  tokenResetSenha   String?           @map("token_reset_senha") @db.VarChar(255)
+  expiracaoToken    DateTime?         @map("expiracao_token") @db.Timestamptz(6)
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime          @default(now()) @map("updated_at") @db.Timestamptz(6)
+  empresasCriadas   Empresa[]         @relation("EmpresaCreatedBy")
+  empresasAtualizadas Empresa[]       @relation("EmpresaUpdatedBy")
+  processosCriados  Processo[]        @relation("ProcessoCreatedBy")
+  processosAtualizados Processo[]     @relation("ProcessoUpdatedBy")
+  etapasCriadas     EtapaProcesso[]   @relation("EtapaCreatedBy")
+  etapasAtualizadas EtapaProcesso[]   @relation("EtapaUpdatedBy")
+  documentosUpload  Documento[]
+  notificacoes      Notificacao[]
+  comunicacoesCriadas ComunicacaoTribunal[] @relation("ComunicacaoCreatedBy")
+  configuracoesAtualizadas Configuracao[] @relation("ConfiguracaoUpdatedBy")
+  logsAtividade     LogAtividade[]
+
+  @@map("usuarios")
+}
+
+model Empresa {
+  id          Int       @id @default(autoincrement())
+  nome        String    @db.VarChar(255)
+  cnpj        String    @unique @db.VarChar(18)
+  endereco    String?   @db.Text
+  telefone    String?   @db.VarChar(20)
+  email       String?   @db.VarChar(255)
+  site        String?   @db.VarChar(255)
+  setor       String?   @db.VarChar(100)
+  fundacao    DateTime? @db.Date
+  descricao   String?   @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  createdById Int?      @map("created_by")
+  createdBy   Usuario?  @relation("EmpresaCreatedBy", fields: [createdById], references: [id])
+  updatedById Int?      @map("updated_by")
+  updatedBy   Usuario?  @relation("EmpresaUpdatedBy", fields: [updatedById], references: [id])
+  socios      Socio[]
+  processos   Processo[]
+  notificacoes Notificacao[]
+
+  @@map("empresas")
+}
+
+model Socio {
+  id        Int       @id @default(autoincrement())
+  empresaId Int       @map("empresa_id")
+  empresa   Empresa   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  nome      String    @db.VarChar(255)
+  cpf       String    @db.VarChar(14)
+  email     String?   @db.VarChar(255)
+  telefone  String?   @db.VarChar(20)
+  cargo     String?   @db.VarChar(100)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("socios")
+}
+
+model Processo {
+  id                  Int           @id @default(autoincrement())
+  empresaId           Int           @map("empresa_id")
+  empresa             Empresa       @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  numeroProcesso      String        @unique @map("numero_processo") @db.VarChar(25)
+  tribunalId          Int           @map("tribunal_id")
+  tribunal            Tribunal      @relation(fields: [tribunalId], references: [id])
+  vara                String        @db.VarChar(100)
+  dataDeferimento     DateTime      @map("data_deferimento") @db.Date
+  dataPublicacaoEdital DateTime?    @map("data_publicacao_edital") @db.Date
+  administradorJudicial String?     @map("administrador_judicial") @db.VarChar(255)
+  status              EmpresaStatus @default(em_vigor)
+  stayPeriodDias      Int           @default(180) @map("stay_period_dias")
+  dataFimStayPeriod   DateTime?     @map("data_fim_stay_period") @db.Date
+  descricao           String?       @db.Text
+  createdAt           DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
+  createdById         Int?          @map("created_by")
+  createdBy           Usuario?      @relation("ProcessoCreatedBy", fields: [createdById], references: [id])
+  updatedById         Int?          @map("updated_by")
+  updatedBy           Usuario?      @relation("ProcessoUpdatedBy", fields: [updatedById], references: [id])
+  etapas              EtapaProcesso[]
+  documentos          Documento[]
+  notificacoes        Notificacao[]
+  comunicacoesTribunal ComunicacaoTribunal[]
+
+  @@map("processos")
+}
+
+model EtapaProcesso {
+  id          Int         @id @default(autoincrement())
+  processoId  Int         @map("processo_id")
+  processo    Processo    @relation(fields: [processoId], references: [id], onDelete: Cascade)
+  titulo      String      @db.VarChar(255)
+  data        DateTime?   @db.Date
+  status      EtapaStatus
+  descricao   String?     @db.Text
+  ordem       Int
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime    @default(now()) @map("updated_at") @db.Timestamptz(6)
+  createdById Int?        @map("created_by")
+  createdBy   Usuario?    @relation("EtapaCreatedBy", fields: [createdById], references: [id])
+  updatedById Int?        @map("updated_by")
+  updatedBy   Usuario?    @relation("EtapaUpdatedBy", fields: [updatedById], references: [id])
+  documentos  Documento[]
+
+  @@map("etapas_processo")
+}
+
+model Documento {
+  id            Int           @id @default(autoincrement())
+  processoId    Int           @map("processo_id")
+  processo      Processo      @relation(fields: [processoId], references: [id], onDelete: Cascade)
+  etapaId       Int?          @map("etapa_id")
+  etapa         EtapaProcesso? @relation(fields: [etapaId], references: [id])
+  titulo        String        @db.VarChar(255)
+  tipoDocumento String        @map("tipo_documento") @db.VarChar(50)
+  caminhoArquivo String       @map("caminho_arquivo") @db.VarChar(255)
+  tamanhoBytes  BigInt        @map("tamanho_bytes")
+  dataUpload    DateTime      @default(now()) @map("data_upload") @db.Timestamptz(6)
+  descricao     String?       @db.Text
+  publico       Boolean       @default(false)
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime      @default(now()) @map("updated_at") @db.Timestamptz(6)
+  uploadedById  Int?          @map("uploaded_by")
+  uploadedBy    Usuario?      @relation(fields: [uploadedById], references: [id])
+
+  @@map("documentos")
+}
+
+model Notificacao {
+  id          Int       @id @default(autoincrement())
+  tipo        String    @db.VarChar(50)
+  titulo      String    @db.VarChar(255)
+  descricao   String    @db.Text
+  lida        Boolean   @default(false)
+  dataCriacao DateTime  @default(now()) @map("data_criacao") @db.Timestamptz(6)
+  dataLeitura DateTime? @map("data_leitura") @db.Timestamptz(6)
+  usuarioId   Int?      @map("usuario_id")
+  usuario     Usuario?  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  empresaId   Int?      @map("empresa_id")
+  empresa     Empresa?  @relation(fields: [empresaId], references: [id])
+  processoId  Int?      @map("processo_id")
+  processo    Processo? @relation(fields: [processoId], references: [id])
+  link        String?   @db.VarChar(255)
+  prioridade  Int       @default(0)
+
+  @@map("notificacoes")
+}
+
+model ComunicacaoTribunal {
+  id              Int       @id @default(autoincrement())
+  tribunalId      Int       @map("tribunal_id")
+  tribunal        Tribunal  @relation(fields: [tribunalId], references: [id])
+  processoId      Int       @map("processo_id")
+  processo        Processo  @relation(fields: [processoId], references: [id])
+  tipoComunicacao String    @map("tipo_comunicacao") @db.VarChar(50)
+  conteudo        String    @db.Text
+  dataEnvio       DateTime  @default(now()) @map("data_envio") @db.Timestamptz(6)
+  status          String    @db.VarChar(50)
+  resposta        String?   @db.Text
+  dataResposta    DateTime? @map("data_resposta") @db.Timestamptz(6)
+  tentativas      Int       @default(0)
+  proximaTentativa DateTime? @map("proxima_tentativa") @db.Timestamptz(6)
+  erro            String?   @db.Text
+  createdById     Int?      @map("created_by")
+  createdBy       Usuario?  @relation("ComunicacaoCreatedBy", fields: [createdById], references: [id])
+
+  @@map("comunicacoes_tribunal")
+}
+
+model LogAtividade {
+  id          Int       @id @default(autoincrement())
+  usuarioId   Int?      @map("usuario_id")
+  usuario     Usuario?  @relation(fields: [usuarioId], references: [id])
+  acao        String    @db.VarChar(50)
+  entidade    String    @db.VarChar(50)
+  entidadeId  Int?      @map("entidade_id")
+  descricao   String    @db.Text
+  dados       Json?
+  ipAddress   String?   @map("ip_address") @db.VarChar(45)
+  userAgent   String?   @map("user_agent") @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("logs_atividade")
+}
+
+model Configuracao {
+  chave       String    @id @db.VarChar(100)
+  valor       String    @db.Text
+  descricao   String?   @db.Text
+  tipo        String    @db.VarChar(20)
+  editavel    Boolean   @default(true)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  updatedById Int?      @map("updated_by")
+  updatedBy   Usuario?  @relation("ConfiguracaoUpdatedBy", fields: [updatedById], references: [id])
+
+  @@map("configuracoes")
+}
+
